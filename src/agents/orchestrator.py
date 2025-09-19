@@ -3,6 +3,7 @@ import os
 from typing import Dict, Any, Optional
 from src.models import AgentState, AgentType, MessageType, Message
 from src.llm_client import get_llm_client
+from src.config import config
 
 class OrchestratorAgent:
     """
@@ -29,6 +30,8 @@ class OrchestratorAgent:
             return await self._gather_requirements(state)
         elif state.current_step == "coordinating_extraction":
             return await self._coordinate_extraction(state)
+        elif state.current_step == "form_learning":
+            return await self._handle_form_learning_complete(state)
         elif state.current_step == "reviewing_extraction":
             return await self._review_extraction(state)
         elif state.current_step == "handling_missing_fields":
@@ -64,8 +67,8 @@ Welcome! I'll help you extract data from PDF documents and fill forms automatica
 ❌ **No files found!**
 
 Please add your files to the following directories:
-  - **data/**: Place your PDF documents to extract data from
-  - **form/**: Place your PDF form templates to be filled
+  - **{config.DATA_DIR}/**: Place your PDF documents to extract data from
+  - **{config.FORM_DIR}/**: Place your PDF form templates to be filled
 
 Once you've added your files, type 'check files' to continue."""
         elif not data_files:
@@ -78,7 +81,7 @@ Welcome! I found form templates but no data documents.
 
 ❌ **No data documents found!**
 
-Please add PDF documents to the **data/** directory, then type 'check files' to continue."""
+Please add PDF documents to the **{config.DATA_DIR}/** directory, then type 'check files' to continue."""
         elif not form_files:
             welcome_message = f"""🤖 **Form Filler Assistant** - Orchestrator Agent
 
@@ -89,7 +92,7 @@ Welcome! I found data documents but no form templates.
 
 ❌ **No form templates found!**
 
-Please add PDF form templates to the **form/** directory, then type 'check files' to continue."""
+Please add form templates (PDF or Excel .xlsm/.xlsx) to the **{config.FORM_DIR}/** directory, then type 'check files' to continue."""
         else:
             # Both files available - proceed
             welcome_message = f"""🤖 **Form Filler Assistant** - Orchestrator Agent
@@ -148,9 +151,9 @@ Great! Now tell me:
             # Still missing files
             missing_msg = "❌ Still missing files:\n"
             if not data_files:
-                missing_msg += "- Add PDF documents to **data/** directory\n"
+                missing_msg += f"- Add PDF documents to **{config.DATA_DIR}/** directory\n"
             if not form_files:
-                missing_msg += "- Add PDF form templates to **form/** directory\n"
+                missing_msg += f"- Add form templates (PDF or Excel .xlsm/.xlsx) to **{config.FORM_DIR}/** directory\n"
             missing_msg += "\nType 'check files' when ready to continue."
             
             state.messages.append({
@@ -222,38 +225,94 @@ Proceeding to data extraction..."""
         return await self._coordinate_extraction(state)
     
     async def _coordinate_extraction(self, state: AgentState) -> AgentState:
-        """Coordinate with the data extractor agent."""
-        print("📄 Coordinating data extraction...")
+        """Coordinate extraction workflow - first form learning, then data extraction."""
+        print("📚 Starting form analysis and data extraction workflow...")
         
-        # Create task for data extractor
-        extraction_task = Message(
-            type=MessageType.DATA_EXTRACTION_REQUEST,
-            sender=self.agent_type,
-            recipient=AgentType.DATA_EXTRACTOR,
-            content="Extract data from the provided document",
-            data={
-                "pdf_path": state.pdf_file_path,
-                "requirements": state.user_instructions
-            }
+        # Check if form learning has been completed
+        form_learning_complete = any(
+            msg.get("type") == "form_learning_complete" 
+            for msg in state.messages
         )
         
-        # Create document list message
-        doc_list = [os.path.basename(f) for f in (state.pdf_file_paths or [state.pdf_file_path] if state.pdf_file_path else [])]
-        doc_message = f"{len(doc_list)} documents: {', '.join(doc_list)}" if len(doc_list) > 1 else doc_list[0] if doc_list else "None"
+        if not form_learning_complete:
+            # First step: Form learning
+            print("📊 Step 1: Form structure analysis...")
+            
+            state.messages.append({
+                "role": "assistant", 
+                "content": f"🔍 **Step 1: Analyzing form structure**\n\n� Form: {os.path.basename(state.form_template_path)}\n\nAnalyzing sections, fields, and requirements to optimize data extraction...",
+                "agent": self.agent_type.value
+            })
+            
+            print(f"✅ Routing to FORM_LEARNER agent")
+            state.current_step = "form_learning"
+            state.current_agent = AgentType.FORM_LEARNER
+            state.requires_human_review = False
+            
+            return state
+        else:
+            # Form learning completed, proceed to data extraction
+            print("📄 Step 2: Data extraction with form insights...")
+            
+            # Create task for data extractor
+            extraction_task = Message(
+                type=MessageType.DATA_EXTRACTION_REQUEST,
+                sender=self.agent_type,
+                recipient=AgentType.DATA_EXTRACTOR,
+                content="Extract data from the provided document using form structure insights",
+                data={
+                    "pdf_path": state.pdf_file_path,
+                    "requirements": state.user_instructions
+                }
+            )
+            
+            # Create document list message
+            doc_list = [os.path.basename(f) for f in (state.pdf_file_paths or [state.pdf_file_path] if state.pdf_file_path else [])]
+            doc_message = f"{len(doc_list)} documents: {', '.join(doc_list)}" if len(doc_list) > 1 else doc_list[0] if doc_list else "None"
+            
+            state.messages.append({
+                "role": "assistant",
+                "content": f"🔄 **Step 2: Extracting data with form insights**\n\n📄 Documents: {doc_message}\n📋 Template: {os.path.basename(state.form_template_path)}\n\nUsing form structure analysis for intelligent data extraction...",
+                "agent": self.agent_type.value,
+                "task": extraction_task.dict()
+            })
+            
+            print(f"✅ Routing to DATA_EXTRACTOR agent")
+            state.current_step = "data_extraction"  # Hand off to data extractor
+            state.current_agent = AgentType.DATA_EXTRACTOR
+            state.requires_human_review = False  # Let workflow continue to data extractor
+            
+            return state
+    
+    async def _handle_form_learning_complete(self, state: AgentState) -> AgentState:
+        """Handle completion of form learning and proceed to data extraction."""
+        print("✅ Form learning completed, proceeding to data extraction...")
         
-        state.messages.append({
-            "role": "assistant",
-            "content": f"🔄 Assigning data extraction task to Data Extractor Agent...\n   📄 Documents: {doc_message}\n   📋 Template: {os.path.basename(state.form_template_path)}",
-            "agent": self.agent_type.value,
-            "task": extraction_task.dict()
-        })
+        # Check if form learning was successful
+        form_learning_data = next(
+            (msg.get("data") for msg in state.messages if msg.get("type") == "form_learning_complete"), 
+            None
+        )
         
-        print(f"✅ Routing to DATA_EXTRACTOR agent")
-        state.current_step = "data_extraction"  # Hand off to data extractor
-        state.current_agent = AgentType.DATA_EXTRACTOR
-        state.requires_human_review = False  # Let workflow continue to data extractor
+        if form_learning_data:
+            form_structure = form_learning_data.get("form_structure", {})
+            sections_count = len(form_structure.get("sections", []))
+            fields_count = form_structure.get("total_fields", 0)
+            
+            state.messages.append({
+                "role": "assistant",
+                "content": f"✅ **Form analysis complete!**\n\n📊 **Analysis Results:**\n- **Form:** {form_structure.get('title', 'Unknown')}\n- **Sections:** {sections_count}\n- **Fields:** {fields_count}\n\nNow proceeding to intelligent data extraction...",
+                "agent": self.agent_type.value
+            })
+        else:
+            state.messages.append({
+                "role": "assistant", 
+                "content": "⚠️ Form learning completed with limited results. Proceeding to basic data extraction...",
+                "agent": self.agent_type.value
+            })
         
-        return state
+        # Continue to data extraction
+        return await self._coordinate_extraction(state)
     
     async def _review_extraction(self, state: AgentState) -> AgentState:
         """Review extraction results and decide next steps."""
@@ -318,13 +377,24 @@ Please review this data:
                 if not found:
                     missing_fields.append(field_name)
         
-        # If no missing fields, proceed to form filling
+        # Prepare user interaction message (always allow user to add more fields or proceed)
         if not missing_fields:
-            print("✅ All required fields have data - proceeding to form filling")
-            return await self._coordinate_form_fill(state)
-        
-        # Present missing fields to user
-        missing_fields_message = f"""
+            print("✅ All required fields have data")
+            missing_fields_message = f"""
+📝 **Data Extraction Complete**
+
+All required fields have been extracted successfully! You can now:
+
+**Options:**
+1. **Add additional fields**: Type field values (e.g., "notes=Additional information")  
+2. **Proceed with form filling**: Type "print" to fill the form with current data
+3. **Retry extraction**: Type "retry" to extract data again with different instructions
+
+**To add a field**: Type `field_name=value` (e.g., `notes=Additional notes`)
+**To add multiple**: Separate with commas (e.g., `notes=Extra info, category=Important`)
+"""
+        else:
+            missing_fields_message = f"""
 📝 **Missing Form Fields Detected**
 
 The following required form fields don't have corresponding data:
@@ -516,7 +586,7 @@ Would you like to:
         """Process user input for missing fields."""
         feedback_lower = feedback.lower().strip()
         
-        if feedback_lower == "print":
+        if feedback_lower in ["print", "approve", "proceed", "continue", "skip"]:
             # Proceed with form filling without additional data
             state.current_step = "coordinating_form_fill"
             state.messages.append({
@@ -703,7 +773,7 @@ Please enter 1, 2, or 3.""",
         return sorted(pdf_files)
     
     def _check_form_files(self) -> list[str]:
-        """Check for PDF files in the form directory."""
+        """Check for form files (PDF and Excel) in the form directory."""
         import os
         from src.config import config
         
@@ -711,12 +781,13 @@ Please enter 1, 2, or 3.""",
         if not os.path.exists(form_dir):
             return []
         
-        pdf_files = []
+        form_files = []
         for file in os.listdir(form_dir):
-            if file.lower().endswith('.pdf'):
-                pdf_files.append(os.path.join(form_dir, file))
+            file_lower = file.lower()
+            if file_lower.endswith('.pdf') or file_lower.endswith('.xlsx') or file_lower.endswith('.xlsm'):
+                form_files.append(os.path.join(form_dir, file))
         
-        return sorted(pdf_files)
+        return sorted(form_files)
     
     def _format_file_list(self, files: list[str]) -> str:
         """Format file list for display."""

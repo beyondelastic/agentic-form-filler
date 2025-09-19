@@ -24,10 +24,10 @@ class Config:
     MODEL_MAX_TOKENS: int = 4000
     
     # File paths
-    DATA_DIR: str = "data"
-    FORM_DIR: str = "form"
-    OUTPUT_DIR: str = "output"
-    DOCUMENT_PATH: str = os.getenv("DOCUMENT_PATH", "data/*.pdf")
+    DATA_DIR: str = os.getenv("DATA_DIR", "data")
+    FORM_DIR: str = os.getenv("FORM_DIR", "form")
+    OUTPUT_DIR: str = os.getenv("OUTPUT_DIR", "output")
+    DOCUMENT_PATH: str = os.getenv("DOCUMENT_PATH", f"{os.getenv('DATA_DIR', 'data')}/*.pdf")
     
     @classmethod
     def validate(cls) -> bool:

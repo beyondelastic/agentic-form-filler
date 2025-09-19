@@ -1,5 +1,5 @@
 # Core dependencies
-langgraph==0.2.56
+langgraph==0.6.7
 langchain==0.3.11
 langchain-community==0.3.10
 langchain-openai==0.2.13
@@ -15,6 +15,9 @@ PyPDF2==3.0.1
 pdfplumber==0.11.4
 pymupdf==1.24.14
 reportlab==4.2.5
+
+# Excel processing
+openpyxl==3.1.2
 
 # Data processing
 pydantic==2.10.4

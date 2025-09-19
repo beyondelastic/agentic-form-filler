@@ -184,7 +184,7 @@ class FormFillerApp:
     
     def load_sample_data(self):
         """Load sample PDF for testing."""
-        data_dir = "data"
+        data_dir = config.DATA_DIR
         if os.path.exists(data_dir):
             pdf_files = [f for f in os.listdir(data_dir) if f.endswith('.pdf')]
             if pdf_files:
@@ -194,7 +194,7 @@ class FormFillerApp:
                     print(f"📄 Loaded sample PDF: {sample_pdf}")
                     return sample_pdf
         
-        print("❌ No sample PDF files found in data/ directory")
+        print(f"❌ No sample PDF files found in {config.DATA_DIR}/ directory")
         return None
 
 async def main():

@@ -1,65 +1,82 @@
-"""Form filler agent that fills PDF forms with extracted data."""
+"""Form filler agent that fills forms using semantic extraction and form learning insights."""
 import os
 import json
 from typing import Dict, Any, Optional
 from datetime import datetime
 
 from src.models import AgentState, AgentType, FormFillingResult
-from src.llm_client import get_llm_client
-from src.tools.pdf_form_filler import PDFFormFillerTool
+from src.tools.semantic_form_filler import SemanticFormFillerTool
 
 class FormFillerAgent:
     """
-    Form Filler agent that:
-    1. Analyzes form templates
-    2. Maps extracted data to form fields
-    3. Fills forms with appropriate data
-    4. Generates output documents
+    Enhanced Form Filler agent that:
+    1. Uses semantic extraction results and form learning insights
+    2. Creates intelligent field mappings without redundant LLM processing
+    3. Fills forms with high accuracy using comprehensive context
+    4. Generates detailed output and mapping reports
     """
     
     def __init__(self):
         self.agent_type = AgentType.FORM_FILLER
-        self.llm_client = get_llm_client()
-        self.pdf_filler = PDFFormFillerTool()
+        self.semantic_filler = SemanticFormFillerTool()
     
     async def process(self, state: AgentState) -> AgentState:
-        """Process form filling with extracted data and form field information."""
-        print(f"\n📝 Form Filler Agent Processing")
+        """Process form filling using semantic extraction and form learning insights."""
+        print(f"\n📝 Enhanced Form Filler Agent Processing")
         
         try:
-            # Validate inputs
+            # Validate inputs - we now require both extracted_data and form_structure
             if not state.extracted_data:
-                return self._handle_form_error(state, "No extracted data available for form filling")
+                return self._handle_form_error(state, "No semantic extraction data available for form filling")
             
-            if not state.form_fields:
-                return self._handle_form_error(state, "No form field information available for mapping")
+            # Check if we have form learning insights (preferred) or fallback to basic fields
+            form_structure = getattr(state, 'form_structure', None)
+            if not form_structure and not getattr(state, 'form_fields', None):
+                return self._handle_form_error(state, "No form structure or field information available")
             
-            print(f"📊 Available data fields: {len(state.extracted_data)} items")
-            print(f"📋 Form fields to fill: {len(state.form_fields)} items")
+            print(f"📊 Available extracted fields: {len(state.extracted_data)} items")
+            if form_structure:
+                total_form_fields = sum(len(section.get('fields', [])) for section in form_structure.get('sections', []))
+                print(f"🧠 Form structure available: {len(form_structure.get('sections', []))} sections, {total_form_fields} fields")
+            else:
+                print(f"📋 Basic form fields available: {len(getattr(state, 'form_fields', []))} items")
             
-            # Create intelligent mapping between extracted data and form fields
-            form_result = await self._create_filled_form(state)
+            # Generate output path
+            output_path = self._generate_output_path(state)
+            
+            # Use semantic form filler
+            semantic_result = await self.semantic_filler.fill_form_semantically(state, output_path)
+            
+            # Convert semantic result to FormFillingResult for compatibility
+            form_result = self._convert_semantic_result(semantic_result)
             
             # Update state with results
             state.filled_form_path = form_result.output_file_path
             state.form_filling_status = "completed" if form_result.success else "failed"
             
-            # Add results to conversation
+            # Add enhanced results to conversation
             if form_result.success:
+                # Calculate mapping statistics from semantic result
+                high_conf_mappings = len([m for m in semantic_result.semantic_mappings if m.confidence >= 0.8])
+                medium_conf_mappings = len([m for m in semantic_result.semantic_mappings if 0.5 <= m.confidence < 0.8])
+                
                 state.messages.append({
                     "role": "assistant",
-                    "content": f"✅ Form filling completed successfully!\n"
-                              f"   📋 Mapped {len(form_result.filled_fields)} out of {len(state.form_fields)} form fields\n"
+                    "content": f"✅ Semantic form filling completed successfully!\n"
+                              f"   🎯 Created {len(semantic_result.semantic_mappings)} semantic mappings\n"
+                              f"   📋 Fields filled: {semantic_result.fields_filled}/{semantic_result.total_form_fields}\n"
+                              f"   🏆 High confidence: {high_conf_mappings}, Medium: {medium_conf_mappings}\n"
                               f"   💾 Output saved to: {form_result.output_file_path}",
                     "agent": self.agent_type.value,
-                    "form_result": form_result.dict()
+                    "semantic_mappings": len(semantic_result.semantic_mappings),
+                    "high_confidence_fields": high_conf_mappings
                 })
             else:
                 state.messages.append({
                     "role": "assistant", 
-                    "content": f"❌ Form filling encountered errors: {form_result.errors}",
+                    "content": f"❌ Semantic form filling encountered errors: {form_result.errors}",
                     "agent": self.agent_type.value,
-                    "form_result": form_result.dict()
+                    "errors": form_result.errors
                 })
             
             # Move to final review
@@ -69,148 +86,56 @@ class FormFillerAgent:
             return state
             
         except Exception as e:
-            return self._handle_form_error(state, f"Form filling error: {str(e)}")
+            return self._handle_form_error(state, f"Semantic form filling error: {str(e)}")
     
-    async def _create_filled_form(self, state: AgentState) -> FormFillingResult:
-        """Create a filled form using the extracted data and PDF form filler tool."""
-        
+    def _generate_output_path(self, state: AgentState) -> str:
+        """Generate appropriate output path for the filled form."""
         try:
-            # Step 1: Use LLM to intelligently map and format the data for form filling
-            print("🧠 Generating intelligent field mapping...")
-            mapping_result = await self._generate_form_mapping(state)
-            
-            # Create output directory if it doesn't exist
-            output_dir = "output"
+            from src.config import config
+            output_dir = config.OUTPUT_DIR
             os.makedirs(output_dir, exist_ok=True)
             
-            # Generate output filename
+            # Determine file extension and create output filename
+            if state.form_template_path and os.path.exists(state.form_template_path):
+                file_extension = os.path.splitext(state.form_template_path)[1].lower()
+                base_name = os.path.splitext(os.path.basename(state.form_template_path))[0]
+            else:
+                file_extension = '.txt'  # Fallback
+                base_name = "form"
+            
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            base_name = os.path.splitext(os.path.basename(state.form_template_path or "form"))[0]
-            output_filename = f"filled_{base_name}_{timestamp}.pdf"
-            output_path = os.path.join(output_dir, output_filename)
+            output_filename = f"filled_{base_name}_{timestamp}{file_extension}"
             
-            # Step 2: Fill the actual PDF form
-            print("📝 Filling PDF form with mapped data...")
-            
-            if not state.form_template_path or not os.path.exists(state.form_template_path):
-                raise ValueError(f"Form template not found: {state.form_template_path}")
-            
-            # Extract mapped fields for PDF filling
-            mapped_fields_for_pdf = mapping_result.get("mapped_fields", {})
-            # Validate based on mapping quality and form field coverage
-            mapping_confidence = mapping_result.get("mapping_confidence", 0)
-            expected_form_fields = state.form_fields or state.required_fields or []
-            
-            if mapping_confidence < 0.3 or len(mapped_fields_for_pdf) == 0:
-                print(f"⚠️ Low mapping confidence ({mapping_confidence:.1%}) - using PDF tool semantic matching")
-                mapped_fields_for_pdf = state.extracted_data
-            
-            # Ensure we have data to work with
-            if not mapped_fields_for_pdf:
-                print(f"❌ No mapped fields available! Using extracted data as fallback.")
-                mapped_fields_for_pdf = state.extracted_data or {}
-            
-            # Use the PDF form filler tool with user context
-            form_context = {
-                "form_type": "Medical" if "patient" in str(state.form_template_path).lower() else "Generic",
-                "domain": self._infer_domain_from_data(state.extracted_data),
-                "required_fields": state.required_fields or []
-            }
-            
-            fill_result = self.pdf_filler.fill_pdf_form(
-                template_path=state.form_template_path,
-                data_mapping=mapped_fields_for_pdf,
-                output_path=output_path,
-                field_types=state.field_types,
-                user_instructions=state.user_instructions,
-                form_context=form_context
-            )
-            
-            # Debug: Check the actual filled PDF to verify results
-            print(f"🔍 Verifying filled PDF: {output_path}")
-            if os.path.exists(output_path):
-                import fitz
-                verify_doc = fitz.open(output_path)
-                verify_page = verify_doc[0]
-                verify_widgets = list(verify_page.widgets())
-                actual_filled = {}
-                for widget in verify_widgets:
-                    if widget.field_name and widget.field_value:
-                        actual_filled[widget.field_name] = widget.field_value
-                verify_doc.close()
-                
-                print(f"🔍 Actual fields filled in PDF: {len(actual_filled)}")
-                print(f"🔍 Actual filled fields: {actual_filled}")
-                
-                # If there's a discrepancy, report it
-                reported_filled = fill_result.get('fields_filled', 0)
-                if len(actual_filled) != reported_filled:
-                    print(f"⚠️ DISCREPANCY: PDF tool reported {reported_filled} fields, but PDF actually has {len(actual_filled)} fields filled")
-                    # Update the result to reflect reality
-                    fill_result['fields_filled'] = len(actual_filled)
-                    fill_result['filled_fields'] = actual_filled
-            
-            # Step 3: Create a text summary as backup/reference
-            summary_filename = f"filled_{base_name}_{timestamp}_summary.txt"
-            summary_path = os.path.join(output_dir, summary_filename)
-            
-            form_content = self._generate_form_content(mapping_result, state, fill_result)
-            with open(summary_path, 'w', encoding='utf-8') as f:
-                f.write(form_content)
-            
-            # Determine success status
-            success = fill_result.get("success", False)
-            errors = fill_result.get("errors", [])
-            
-            if not success and not errors:
-                errors = ["PDF form filling completed with warnings"]
-            
-            print(f"✅ PDF Form saved to: {output_path}")
-            print(f"📄 Summary saved to: {summary_path}")
-            print(f"📊 Fields filled: {fill_result.get('fields_filled', 0)}/{fill_result.get('total_fields_found', 0)}")
-            
-            return FormFillingResult(
-                output_file_path=output_path,
-                filled_fields=fill_result.get("filled_fields", {}),
-                success=success,
-                errors=errors if errors else None
-            )
+            return os.path.join(output_dir, output_filename)
             
         except Exception as e:
-            print(f"❌ Error creating filled form: {str(e)}")
-            
-            # Fallback: Create text-based form if PDF filling fails
-            try:
-                print("🔄 Creating text-based fallback form...")
-                
-                mapping_result = await self._generate_form_mapping(state)
-                
-                output_dir = "output"
-                os.makedirs(output_dir, exist_ok=True)
-                
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                fallback_filename = f"filled_form_text_{timestamp}.txt"
-                fallback_path = os.path.join(output_dir, fallback_filename)
-                
-                form_content = self._generate_form_content(mapping_result, state, {"method": "text_fallback"})
-                
-                with open(fallback_path, 'w', encoding='utf-8') as f:
-                    f.write(form_content)
-                
-                return FormFillingResult(
-                    output_file_path=fallback_path,
-                    filled_fields=mapping_result.get("mapped_fields", {}),
-                    success=True,
-                    errors=[f"PDF filling failed, created text version: {str(e)}"]
-                )
-                
-            except Exception as fallback_error:
-                return FormFillingResult(
-                    output_file_path="",
-                    filled_fields={},
-                    success=False,
-                    errors=[f"Form filling failed: {str(e)}", f"Fallback failed: {str(fallback_error)}"]
-                )
+            # Fallback path
+            return f"./filled_form_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+    
+    def _convert_semantic_result(self, semantic_result) -> FormFillingResult:
+        """Convert SemanticFormFillingResult to FormFillingResult for compatibility."""
+        
+        # Extract filled fields from semantic mappings
+        filled_fields = {}
+        for mapping in semantic_result.semantic_mappings:
+            filled_fields[mapping.form_field_id] = mapping.extracted_value
+        
+        return FormFillingResult(
+            output_file_path=semantic_result.output_file_path,
+            filled_fields=filled_fields,
+            success=semantic_result.success,
+            errors=semantic_result.errors
+        )
+
+    # Legacy method - kept for compatibility, now deprecated
+    async def _create_filled_form(self, state: AgentState) -> FormFillingResult:
+        """Legacy method - now uses semantic form filler internally."""
+        print("⚠️ Using legacy _create_filled_form - consider updating to semantic approach")
+        
+        # Redirect to semantic approach
+        output_path = self._generate_output_path(state)
+        semantic_result = await self.semantic_filler.fill_form_semantically(state, output_path)
+        return self._convert_semantic_result(semantic_result)
     
     async def _generate_form_mapping(self, state: AgentState) -> Dict[str, Any]:
         """Use LLM to intelligently map extracted data to form fields."""
@@ -507,3 +432,205 @@ Please provide the optimal mapping of extracted data to the specific form fields
         state.form_filling_status = "failed"
         
         return state
+    
+    async def _fill_excel_form(self, state: AgentState, mapping_result: Dict[str, Any], output_path: str) -> FormFillingResult:
+        """Fill Excel form using ExcelFormFillerTool."""
+        try:
+            # Extract mapped fields for Excel filling
+            mapped_fields_for_excel = mapping_result.get("mapped_fields", {})
+            
+            # Validate mapping quality
+            mapping_confidence = mapping_result.get("mapping_confidence", 0)
+            
+            if mapping_confidence < 0.3 or len(mapped_fields_for_excel) == 0:
+                print(f"⚠️ Low mapping confidence ({mapping_confidence:.1%}) - using Excel tool semantic matching")
+                mapped_fields_for_excel = state.extracted_data
+            
+            # Ensure we have data to work with
+            if not mapped_fields_for_excel:
+                print(f"❌ No mapped fields available! Using extracted data as fallback.")
+                mapped_fields_for_excel = state.extracted_data or {}
+            
+            # Use the Excel form filler tool
+            fill_result = self.excel_filler.fill_excel_form(
+                template_path=str(state.form_template_path),
+                data_mapping=mapped_fields_for_excel,
+                output_path=output_path
+            )
+            
+            # Create a text summary as backup/reference
+            from src.config import config
+            output_dir = config.OUTPUT_DIR
+            base_name = os.path.splitext(os.path.basename(output_path))[0]
+            summary_filename = f"{base_name}_summary.txt"
+            summary_path = os.path.join(output_dir, summary_filename)
+            
+            form_content = self._generate_form_content(mapping_result, state, fill_result)
+            with open(summary_path, 'w', encoding='utf-8') as f:
+                f.write(form_content)
+            
+            # Determine success status
+            success = fill_result.get("success", False)
+            errors = fill_result.get("errors", [])
+            
+            if not success and not errors:
+                errors = ["Excel form filling completed with warnings"]
+            
+            print(f"✅ Excel Form saved to: {output_path}")
+            print(f"📄 Summary saved to: {summary_path}")
+            print(f"📊 Fields filled: {fill_result.get('fields_filled', 0)}")
+            
+            return FormFillingResult(
+                output_file_path=output_path,
+                filled_fields=fill_result.get("filled_fields", {}),
+                success=success,
+                errors=errors if errors else None
+            )
+            
+        except Exception as e:
+            print(f"❌ Error filling Excel form: {str(e)}")
+            return FormFillingResult(
+                output_file_path="",
+                filled_fields={},
+                success=False,
+                errors=[f"Excel form filling failed: {str(e)}"]
+            )
+    
+    async def _fill_pdf_form(self, state: AgentState, mapping_result: Dict[str, Any], output_path: str) -> FormFillingResult:
+        """Fill PDF form using integrated semantic form filling."""
+        try:
+            # Extract mapped fields for PDF filling
+            mapped_fields_for_pdf = mapping_result.get("mapped_fields", {})
+            
+            # Validate based on mapping quality and form field coverage
+            mapping_confidence = mapping_result.get("mapping_confidence", 0)
+            expected_form_fields = state.form_fields or state.required_fields or []
+            
+            if mapping_confidence < 0.3 or len(mapped_fields_for_pdf) == 0:
+                print(f"⚠️ Low mapping confidence ({mapping_confidence:.1%}) - using PDF tool semantic matching")
+                mapped_fields_for_pdf = state.extracted_data
+            
+            # Ensure we have data to work with
+            if not mapped_fields_for_pdf:
+                print(f"❌ No mapped fields available! Using extracted data as fallback.")
+                mapped_fields_for_pdf = state.extracted_data or {}
+            
+            # Use the PDF form filler tool with user context
+            form_context = {
+                "form_type": "Medical" if "patient" in str(state.form_template_path).lower() else "Generic",
+                "domain": self._infer_domain_from_data(state.extracted_data),
+                "required_fields": state.required_fields or []
+            }
+            
+            fill_result = self.pdf_filler.fill_pdf_form(
+                template_path=state.form_template_path,
+                data_mapping=mapped_fields_for_pdf,
+                output_path=output_path,
+                field_types=state.field_types,
+                user_instructions=state.user_instructions,
+                form_context=form_context
+            )
+            
+            # Debug: Check the actual filled PDF to verify results
+            print(f"🔍 Verifying filled PDF: {output_path}")
+            if os.path.exists(output_path):
+                import fitz
+                verify_doc = fitz.open(output_path)
+                verify_page = verify_doc[0]
+                verify_widgets = list(verify_page.widgets())
+                actual_filled = {}
+                for widget in verify_widgets:
+                    if widget.field_name and widget.field_value:
+                        actual_filled[widget.field_name] = widget.field_value
+                verify_doc.close()
+                
+                print(f"🔍 Actual fields filled in PDF: {len(actual_filled)}")
+                print(f"🔍 Actual filled fields: {actual_filled}")
+                
+                # If there's a discrepancy, report it
+                reported_filled = fill_result.get('fields_filled', 0)
+                if len(actual_filled) != reported_filled:
+                    print(f"⚠️ DISCREPANCY: PDF tool reported {reported_filled} fields, but PDF actually has {len(actual_filled)} fields filled")
+                    # Update the result to reflect reality
+                    fill_result['fields_filled'] = len(actual_filled)
+                    fill_result['filled_fields'] = actual_filled
+            
+            # Create a text summary as backup/reference
+            from src.config import config
+            output_dir = config.OUTPUT_DIR
+            base_name = os.path.splitext(os.path.basename(output_path))[0]
+            summary_filename = f"{base_name}_summary.txt"
+            summary_path = os.path.join(output_dir, summary_filename)
+            
+            form_content = self._generate_form_content(mapping_result, state, fill_result)
+            with open(summary_path, 'w', encoding='utf-8') as f:
+                f.write(form_content)
+            
+            # Determine success status
+            success = fill_result.get("success", False)
+            errors = fill_result.get("errors", [])
+            
+            if not success and not errors:
+                errors = ["PDF form filling completed with warnings"]
+            
+            print(f"✅ PDF Form saved to: {output_path}")
+            print(f"📄 Summary saved to: {summary_path}")
+            print(f"📊 Fields filled: {fill_result.get('fields_filled', 0)}/{fill_result.get('total_fields_found', 0)}")
+            
+            return FormFillingResult(
+                output_file_path=output_path,
+                filled_fields=fill_result.get("filled_fields", {}),
+                success=success,
+                errors=errors if errors else None
+            )
+            
+        except Exception as e:
+            print(f"❌ Error filling PDF form: {str(e)}")
+            return FormFillingResult(
+                output_file_path="",
+                filled_fields={},
+                success=False,
+                errors=[f"PDF form filling failed: {str(e)}"]
+            )
+
+    async def _save_mapping_json(self, mapping_result: Dict[str, Any], state: AgentState) -> None:
+        """Save field mapping results to JSON file for logging and debugging."""
+        try:
+            from datetime import datetime
+            import json
+            from src.config import config
+            
+            # Create output directory if it doesn't exist
+            os.makedirs(config.OUTPUT_DIR, exist_ok=True)
+            
+            # Create comprehensive mapping log
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"field_mapping_{timestamp}.json"
+            filepath = os.path.join(config.OUTPUT_DIR, filename)
+            
+            # Prepare JSON data with both input and output
+            mapping_data = {
+                "timestamp": datetime.now().isoformat(),
+                "form_template": os.path.basename(state.form_template_path) if state.form_template_path else "unknown",
+                "input_data": {
+                    "extracted_fields_count": len(state.extracted_data) if state.extracted_data else 0,
+                    "extracted_data": state.extracted_data or {},
+                    "form_fields_count": len(state.form_fields) if state.form_fields else 0,
+                    "available_form_fields": list(state.form_fields.keys()) if state.form_fields else [],
+                    "required_fields": state.required_fields or []
+                },
+                "mapping_result": mapping_result,
+                "metadata": {
+                    "processor": "FormFillerAgent", 
+                    "version": "1.0"
+                }
+            }
+            
+            # Save to JSON file
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump(mapping_data, f, indent=2, ensure_ascii=False)
+            
+            print(f"💾 Field mapping saved to: {filename}")
+            
+        except Exception as e:
+            print(f"⚠️ Could not save mapping JSON: {str(e)}")

@@ -1,10 +1,10 @@
 """LangGraph workflow orchestrating the multi-agent form filler system."""
 from typing import Dict, Any
 from langgraph.graph import StateGraph, END
-from langgraph.prebuilt import ToolExecutor
 
 from src.models import AgentState, AgentType
 from src.agents.orchestrator import OrchestratorAgent
+from src.agents.form_learner import FormLearningAgent
 from src.agents.data_extractor import DataExtractorAgent  
 from src.agents.form_filler import FormFillerAgent
 
@@ -14,14 +14,16 @@ class FormFillerWorkflow:
     
     Workflow Steps:
     1. Orchestrator initializes and gathers requirements
-    2. Data Extractor processes PDF documents
-    3. Orchestrator reviews extraction results
-    4. Form Filler creates filled forms
-    5. Final review and human interaction
+    2. Form Learner analyzes target form structure 
+    3. Data Extractor processes PDF documents using form insights
+    4. Orchestrator reviews extraction results
+    5. Form Filler creates filled forms
+    6. Final review and human interaction
     """
     
     def __init__(self):
         self.orchestrator = OrchestratorAgent()
+        self.form_learner = FormLearningAgent()
         self.data_extractor = DataExtractorAgent()
         self.form_filler = FormFillerAgent()
         
@@ -37,6 +39,7 @@ class FormFillerWorkflow:
         
         # Add nodes (agents)
         workflow.add_node("orchestrator", self._orchestrator_node)
+        workflow.add_node("form_learner", self._form_learner_node)
         workflow.add_node("data_extractor", self._data_extractor_node)
         workflow.add_node("form_filler", self._form_filler_node)
         
@@ -48,9 +51,20 @@ class FormFillerWorkflow:
             "orchestrator",
             self._route_from_orchestrator,
             {
+                "form_learner": "form_learner",
                 "data_extractor": "data_extractor",
                 "form_filler": "form_filler", 
                 "end": END  # End when human input is needed
+            }
+        )
+        
+        workflow.add_conditional_edges(
+            "form_learner",
+            self._route_from_form_learner,
+            {
+                "data_extractor": "data_extractor",
+                "orchestrator": "orchestrator",
+                "end": END
             }
         )
         
@@ -78,6 +92,10 @@ class FormFillerWorkflow:
         """Orchestrator agent node."""
         return await self.orchestrator.process(state)
     
+    async def _form_learner_node(self, state: AgentState) -> AgentState:
+        """Form learner agent node."""
+        return await self.form_learner.process(state)
+    
     async def _data_extractor_node(self, state: AgentState) -> AgentState:
         """Data extractor agent node."""
         return await self.data_extractor.process(state)
@@ -94,6 +112,9 @@ class FormFillerWorkflow:
         if state.requires_human_review:
             print("   → Ending for human review")
             return "end"  # End workflow when human input is needed
+        elif state.current_agent == AgentType.FORM_LEARNER:
+            print("   → Routing to form_learner")
+            return "form_learner"
         elif state.current_agent == AgentType.DATA_EXTRACTOR:
             print("   → Routing to data_extractor")
             return "data_extractor"
@@ -106,6 +127,23 @@ class FormFillerWorkflow:
         else:
             print("   → Ending - default case")
             return "end"  # Default to end if unclear
+    
+    def _route_from_form_learner(self, state: AgentState) -> str:
+        """Route from form learner."""
+        print(f"🔀 Routing from form_learner: step={state.current_step}, agent={state.current_agent}")
+        
+        if state.requires_human_review:
+            print("   → Ending for human review")
+            return "end"
+        elif state.current_agent == AgentType.DATA_EXTRACTOR:
+            print("   → Routing to data_extractor")
+            return "data_extractor"
+        elif state.current_agent == AgentType.ORCHESTRATOR:
+            print("   → Routing to orchestrator")
+            return "orchestrator"
+        else:
+            print("   → Ending - default from form_learner")
+            return "end"
     
     def _route_from_data_extractor(self, state: AgentState) -> str:
         """Route from data extractor."""
@@ -164,3 +202,31 @@ class FormFillerWorkflow:
         """Process human feedback and update state."""
         updated_state = self.orchestrator.handle_human_feedback(state, feedback)
         return updated_state
+
+
+# Module-level function for LangGraph Studio
+def create_form_filler_graph():
+    """
+    Create and return the compiled form filler graph for LangGraph Studio.
+    
+    This graph orchestrates a multi-agent workflow for intelligent form filling:
+    1. Orchestrator - Manages the workflow and user interactions
+    2. Data Extractor - Extracts data from PDF documents using Azure Document Intelligence
+    3. Form Filler - Fills PDF and Excel forms with intelligent field mapping
+    
+    The workflow supports both PDF and Excel (.xlsm) forms with semantic field matching.
+    """
+    workflow = FormFillerWorkflow()
+    compiled_graph = workflow.compile()
+    
+    # Add metadata for better Studio visualization
+    compiled_graph._metadata = {
+        "name": "Multi-Agent Form Filler",
+        "description": "Intelligent form filling system supporting PDF and Excel forms",
+        "version": "1.0",
+        "agents": ["Orchestrator", "Data Extractor", "Form Filler"],
+        "supported_formats": ["PDF", "Excel (.xlsx/.xlsm)"],
+        "features": ["Azure Document Intelligence", "Semantic Field Mapping", "Macro Preservation"]
+    }
+    
+    return compiled_graph

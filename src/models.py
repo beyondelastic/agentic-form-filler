@@ -6,6 +6,7 @@ from enum import Enum
 class AgentType(str, Enum):
     """Types of agents in the system."""
     ORCHESTRATOR = "orchestrator"
+    FORM_LEARNER = "form_learner"
     DATA_EXTRACTOR = "data_extractor"
     FORM_FILLER = "form_filler"
 
@@ -41,6 +42,10 @@ class AgentState(BaseModel):
     field_types: Optional[Dict[str, str]] = None
     required_fields: Optional[List[str]] = None
     form_analysis_confidence: Optional[float] = None
+    
+    # Form learning results (new comprehensive structure)
+    form_structure: Optional[Dict[str, Any]] = None
+    form_learning_summary: Optional[Dict[str, Any]] = None
     
     # Form filling results
     filled_form_path: Optional[str] = None

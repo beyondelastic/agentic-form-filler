@@ -1,0 +1,7 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "form_filler": "./src/workflow.py:create_form_filler_graph"
+  },
+  "env": ".env"
+}

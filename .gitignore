@@ -46,6 +46,11 @@ test_*.pdf
 temp_*.pdf
 *.bak
 *.tmp
+*.temp
+*.cache
+
+# Generated output files with timestamps
+*_[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]_[0-9][0-9][0-9][0-9][0-9][0-9].*
 
 # Environment variables
 .env
@@ -53,4 +58,10 @@ temp_*.pdf
 # Output files (keep directory structure but ignore contents)
 output/*.pdf
 output/*.txt
+output/*.xlsm
+output/*.xlsx
 !output/.gitkeep
+
+# LangGraph
+.langgraph_api/
+*.pckl
