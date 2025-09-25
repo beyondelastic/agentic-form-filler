@@ -1,11 +1,11 @@
 # Core dependencies
 langgraph==0.6.7
-langchain==0.3.11
-langchain-community==0.3.10
-langchain-openai==0.2.13
+langchain>=0.3.15
+langchain-community>=0.3.15
+langchain-openai>=0.2.15
 
 # Azure OpenAI
-openai==1.57.0
+openai>=1.104.2
 
 # Azure Document Intelligence
 azure-ai-formrecognizer==3.3.3
