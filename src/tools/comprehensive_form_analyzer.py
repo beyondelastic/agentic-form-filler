@@ -533,7 +533,7 @@ JSON Structure Required:
             "instructions": [],
             "fields": [
                 {{
-                    "id": "txtf_3_Vorname",
+                    "id": "form_field_first_name",
                     "name": "First Name", 
                     "type": "text",
                     "required": true,

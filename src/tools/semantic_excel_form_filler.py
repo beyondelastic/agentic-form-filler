@@ -915,6 +915,28 @@ Which extracted field best matches this Excel field? Consider semantic meaning a
                 # Format is "WorksheetName!CellAddress", extract just the cell part
                 cell_address = cell_address.split('!')[-1]
             
+            # Handle case where LLM returned multiple coordinates (e.g., "B19 B20 B21 B22")
+            # This happens when it thinks multiple cells belong to the same field
+            if ' ' in cell_address:
+                original_address = cell_address
+                # Split by space and use the first valid coordinate
+                coordinates = cell_address.split()
+                for coord in coordinates:
+                    coord = coord.strip()
+                    if coord and self._is_valid_excel_coordinate(coord):
+                        cell_address = coord
+                        print(f"📍 Multiple coordinates detected for '{mapping.form_field_name}': '{original_address}' -> using '{cell_address}'")
+                        break
+                else:
+                    # If no valid coordinate found, use the first one and let it fail gracefully
+                    cell_address = coordinates[0] if coordinates else cell_address
+                    print(f"⚠️ No valid coordinates found in '{original_address}' for '{mapping.form_field_name}', trying '{cell_address}'")
+            
+            # Validate final coordinate
+            if not self._is_valid_excel_coordinate(cell_address):
+                print(f"⚠️ Invalid Excel coordinate '{cell_address}' for field '{mapping.form_field_name}'")
+                return False
+            
             # Get the cell
             cell = worksheet[cell_address]
             
@@ -1105,6 +1127,13 @@ Which extracted field best matches this Excel field? Consider semantic meaning a
             
         except Exception as e:
             print(f"⚠️ Could not save Excel mapping report: {e}")
+
+    def _is_valid_excel_coordinate(self, coordinate: str) -> bool:
+        """Check if a coordinate is a valid Excel cell reference (e.g., A1, B19, etc.)."""
+        import re
+        # Match pattern like A1, Z99, AA1, etc.
+        pattern = r'^[A-Z]+[1-9]\d*$'
+        return bool(re.match(pattern, coordinate.upper()))
 
     def _get_mapping_report_path(self, output_path: str) -> str:
         """Generate path for the mapping report."""

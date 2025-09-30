@@ -79,7 +79,8 @@ class SemanticDataExtractor:
         self,
         document_paths: List[str],
         form_fields: Dict[str, Any],
-        form_learning_data: Optional[Dict[str, Any]] = None
+        form_learning_data: Optional[Dict[str, Any]] = None,
+        correction_context: Optional[str] = None
     ) -> Dict[str, SemanticExtractionResult]:
         """
         Extract data from documents based on form field requirements.
@@ -101,7 +102,7 @@ class SemanticDataExtractor:
         print(f"🔍 Starting semantic data extraction for {len(form_fields)} fields from {len(document_paths)} documents")
         
         # Convert form fields to extraction requests
-        extraction_requests = self._create_extraction_requests(form_fields, form_learning_data)
+        extraction_requests = self._create_extraction_requests(form_fields, form_learning_data, correction_context)
         
         # Extract raw content from all documents
         document_contents = []
@@ -137,7 +138,8 @@ class SemanticDataExtractor:
     def _create_extraction_requests(
         self,
         form_fields: Dict[str, Any],
-        form_learning_data: Optional[Dict[str, Any]] = None
+        form_learning_data: Optional[Dict[str, Any]] = None,
+        correction_context: Optional[str] = None
     ) -> List[FieldExtractionRequest]:
         """Create extraction requests from form field definitions."""
         
@@ -163,6 +165,10 @@ class SemanticDataExtractor:
             
             # Enhance context with semantic understanding
             enhanced_context = self._enhance_field_context(field_name, field_type, context, description)
+            
+            # Add correction context if field mentioned in quality feedback
+            if correction_context and field_name in correction_context:
+                enhanced_context += f"\n\nQUALITY CORRECTION: {correction_context}"
             
             request = FieldExtractionRequest(
                 field_id=field_id,
@@ -558,7 +564,7 @@ class SemanticDataExtractor:
                 return location
         
         # Priority 3: Look for common German cities in all documents
-        common_cities = ['Wuppertal', 'Berlin', 'München', 'Hamburg', 'Köln', 'Frankfurt', 'Düsseldorf', 'Stuttgart']
+        common_cities = ['Berlin', 'München', 'Hamburg', 'Köln', 'Frankfurt', 'Düsseldorf', 'Stuttgart']
         
         for doc_content in document_contents:
             text = doc_content.get('text', '')
@@ -567,7 +573,7 @@ class SemanticDataExtractor:
                     return city
         
         # Fallback - return default employer location based on the sample data
-        return "Wuppertal"
+        return "Berlin"
     
     def _generate_current_date(self) -> str:
         """Generate current date in German format (DD.MM.YYYY)."""
@@ -848,6 +854,71 @@ class SemanticDataExtractor:
         else:
             document_guidance = "\n- IMPORTANT: For personal/employee fields, prioritize information from candidate/applicant document sections (CV/resume/application sections)"
         
+        # Special handling for document date fields like "Eingangsdatum"  
+        is_document_date = (request.field_type == 'date' and 
+                           any(word in request.field_name.lower() for word in ['eingang', 'eingangsdatum', 'document', 'submission', 'application']))
+        
+        # Also check field description/context for document date indicators
+        if request.field_type == 'date' and not is_document_date:
+            context_text = (request.context or "").lower() + (request.description or "").lower()
+            is_document_date = any(word in context_text for word in 
+                ['bewerbungseingang', 'eingang', 'submission', 'received', 'document', 'antrag'])
+        
+        print(f"   🔍 Field analysis - {request.field_name}: is_document_date={is_document_date}, type={request.field_type}")
+        
+        # Debug: Show what dates are available in the text
+        if request.field_type == 'date':
+            dates_in_text = re.findall(r'\d{1,2}\.\d{1,2}\.\d{2,4}', all_text)
+            print(f"   📅 Available dates in documents: {dates_in_text}")
+        
+        date_instructions = ""
+        if is_document_date:
+            print(f"   🎯 Applying special document date extraction for {request.field_name}")
+            
+            # Pre-filter dates to exclude obvious birth dates
+            document_date_candidate = self._find_document_date_candidate(all_text, request)
+            if document_date_candidate:
+                print(f"   ✅ Found document date candidate: {document_date_candidate}")
+                print(f"   ⚡ Using pre-filtered candidate directly (bypassing LLM)")
+                
+                # Return the pre-filtered candidate directly with high confidence
+                return SemanticExtractionResult(
+                    field_id=request.field_id,
+                    field_name=request.field_name,
+                    extracted_value=document_date_candidate,
+                    confidence=0.95,  # High confidence since it passed contextual analysis
+                    source_location="contextual_date_analysis",
+                    extraction_method="contextual_scoring",
+                    validation_status="valid"
+                )
+            
+            else:
+                date_instructions = f"""
+
+🎯 DOCUMENT DATE EXTRACTION FOR {request.field_name}:
+NO PRE-FILTERED CANDIDATE FOUND - Please search manually for document/application dates.
+"""
+                date_instructions = f"""
+
+🚨🚨🚨 CRITICAL DATE EXTRACTION FOR {request.field_name} 🚨🚨🚨:
+This field represents: {request.description or 'document/application date'}
+
+WHAT TO EXTRACT:
+✅ APPLICATION/SUBMISSION date from cover letters (e.g., "Berlin, 24.06.25")
+✅ Document dates near "Bewerbung" or application context  
+✅ Recent dates (2024-2025) in application headers
+✅ Dates that appear in location + date format (e.g., "City, DD.MM.YY")
+
+WHAT TO ABSOLUTELY IGNORE:
+❌ Birth dates (e.g., "01.01.2001", "geboren am 01. Januar 2001")
+❌ Dates in CV/biographical sections
+❌ Old dates from birth years (1990s, 2000s early)
+❌ Graduation dates from school certificates  
+❌ Any date marked as "Geburtsdatum" or "geboren"
+
+DECISION RULE: If you see multiple dates, choose the RECENT one (2024-2025) that appears in application/cover letter context, NOT the birth date!
+"""
+        
         # Create targeted prompt for this specific field
         extraction_prompt = f"""
 Extract the value for the field "{request.field_name}" from the following document content.
@@ -858,7 +929,7 @@ FIELD INFORMATION:
 - Field Type: {request.field_type}
 - Required: {request.required}
 - Field Context: {request.context}
-- Expected Format: {request.expected_format or 'Any format'}
+- Expected Format: {request.expected_format or 'Any format'}{date_instructions}
 
 DOCUMENT CONTENT (first 4000 characters):
 {all_text[:4000]}
@@ -895,7 +966,8 @@ EXTRACTED VALUE:
             # Clean up response
             if response_text and response_text != "NOT_FOUND" and len(response_text) < 200:
                 # Remove common prefixes/suffixes
-                response_text = re.sub(r'^(EXTRACTED VALUE:?|ANSWER:?|RESULT:?)\s*', '', response_text, flags=re.IGNORECASE)
+                import re as regex_module
+                response_text = regex_module.sub(r'^(EXTRACTED VALUE:?|ANSWER:?|RESULT:?)\s*', '', response_text, flags=regex_module.IGNORECASE)
                 response_text = response_text.strip('"\'`')
                 
                 if self._validate_field_value(response_text, request.field_type):
@@ -1449,3 +1521,78 @@ EXTRACTED VALUE:
         
         print(f"💾 Semantic extraction results saved: {output_path}")
         return output_path
+    
+    def _find_document_date_candidate(self, all_text: str, request: FieldExtractionRequest) -> Optional[str]:
+        """Find the most likely document/application date using contextual analysis."""
+        from datetime import datetime
+        
+        current_year = datetime.now().year
+        
+        # Find all dates in the text
+        date_patterns = [
+            r'\d{1,2}\.\d{1,2}\.\d{2,4}',  # DD.MM.YY or DD.MM.YYYY  
+            r'\d{1,2}/\d{1,2}/\d{2,4}',   # DD/MM/YY
+        ]
+        
+        candidates = []
+        
+        for pattern in date_patterns:
+            matches = re.finditer(pattern, all_text)
+            for match in matches:
+                date_str = match.group()
+                start_pos = match.start()
+                end_pos = match.end()
+                
+                # Get context around the date (50 chars before and after)
+                context_start = max(0, start_pos - 50)
+                context_end = min(len(all_text), end_pos + 50)
+                context = all_text[context_start:context_end].lower()
+                
+                # Score this date based on context
+                score = 0
+                
+                # Positive indicators (document/application context)
+                if any(word in context for word in ['bewerbung', 'application', 'brief', 'letter']):
+                    score += 30
+                if any(word in context for word in ['sehr geehrte', 'dear', 'submission']):
+                    score += 20
+                if re.search(r'\w+,\s*' + re.escape(date_str), all_text):  # City, date pattern
+                    score += 25
+                
+                # Check if it's a recent date
+                try:
+                    parts = date_str.split('.')
+                    if len(parts) == 3:
+                        year = int(parts[2])
+                        if year < 100:  # 2-digit year
+                            year += 2000 if year < 50 else 1900
+                        
+                        if current_year - 1 <= year <= current_year + 1:  # Recent date
+                            score += 40
+                        elif year < 2020:  # Old date (likely birth date)
+                            score -= 50
+                except:
+                    pass
+                
+                # Negative indicators (personal/birth context)
+                if any(word in context for word in ['geburt', 'geboren', 'birth', 'born']):
+                    score -= 60
+                if any(word in context for word in ['lebenslauf', 'cv', 'resume', 'personal']):
+                    score -= 30
+                
+                candidates.append({
+                    'date': date_str,
+                    'score': score,
+                    'context': context[:100]  # First 100 chars of context
+                })
+        
+        # Sort by score and return the best candidate
+        if candidates:
+            best_candidate = max(candidates, key=lambda x: x['score'])
+            if best_candidate['score'] > 10:  # Only return if reasonably confident
+                print(f"   📊 Date scoring results:")
+                for c in sorted(candidates, key=lambda x: x['score'], reverse=True)[:3]:
+                    print(f"     - {c['date']}: score={c['score']}, context='{c['context'][:50]}...'")
+                return best_candidate['date']
+        
+        return None

@@ -7,6 +7,7 @@ from src.agents.orchestrator import OrchestratorAgent
 from src.agents.form_learner import FormLearningAgent
 from src.agents.data_extractor import DataExtractorAgent  
 from src.agents.form_filler import FormFillerAgent
+from src.agents.quality_checker import QualityCheckerAgent
 
 class FormFillerWorkflow:
     """
@@ -18,7 +19,9 @@ class FormFillerWorkflow:
     3. Data Extractor processes PDF documents using form insights
     4. Orchestrator reviews extraction results
     5. Form Filler creates filled forms
-    6. Final review and human interaction
+    6. Quality Checker validates filled forms against reference patterns
+    7. Iterative improvement if quality issues found
+    8. Final review and human interaction
     """
     
     def __init__(self):
@@ -26,6 +29,7 @@ class FormFillerWorkflow:
         self.form_learner = FormLearningAgent()
         self.data_extractor = DataExtractorAgent()
         self.form_filler = FormFillerAgent()
+        self.quality_checker = QualityCheckerAgent()
         
         # Build the workflow graph
         self.workflow = self._build_workflow()
@@ -42,6 +46,7 @@ class FormFillerWorkflow:
         workflow.add_node("form_learner", self._form_learner_node)
         workflow.add_node("data_extractor", self._data_extractor_node)
         workflow.add_node("form_filler", self._form_filler_node)
+        workflow.add_node("quality_checker", self._quality_checker_node)
         
         # Set entry point
         workflow.set_entry_point("orchestrator")
@@ -53,7 +58,8 @@ class FormFillerWorkflow:
             {
                 "form_learner": "form_learner",
                 "data_extractor": "data_extractor",
-                "form_filler": "form_filler", 
+                "form_filler": "form_filler",
+                "quality_checker": "quality_checker",
                 "end": END  # End when human input is needed
             }
         )
@@ -81,6 +87,16 @@ class FormFillerWorkflow:
             "form_filler",
             self._route_from_form_filler, 
             {
+                "quality_checker": "quality_checker",
+                "orchestrator": "orchestrator",
+                "end": END
+            }
+        )
+        
+        workflow.add_conditional_edges(
+            "quality_checker",
+            self._route_from_quality_checker,
+            {
                 "orchestrator": "orchestrator",
                 "end": END
             }
@@ -104,6 +120,10 @@ class FormFillerWorkflow:
         """Form filler agent node.""" 
         return await self.form_filler.process(state)
     
+    async def _quality_checker_node(self, state: AgentState) -> AgentState:
+        """Quality checker agent node."""
+        return await self.quality_checker.process(state)
+    
     def _route_from_orchestrator(self, state: AgentState) -> str:
         """Route from orchestrator based on current step."""
         
@@ -121,6 +141,9 @@ class FormFillerWorkflow:
         elif state.current_agent == AgentType.FORM_FILLER:
             print("   → Routing to form_filler")
             return "form_filler"
+        elif state.current_agent == AgentType.QUALITY_CHECKER:
+            print("   → Routing to quality_checker")
+            return "quality_checker"
         elif state.current_step == "completed":
             print("   → Ending - workflow completed")
             return "end"
@@ -154,9 +177,29 @@ class FormFillerWorkflow:
     
     def _route_from_form_filler(self, state: AgentState) -> str:
         """Route from form filler."""
-        if state.current_agent == AgentType.ORCHESTRATOR:
+        print(f"🔀 Routing from form_filler: step={state.current_step}, agent={state.current_agent}")
+        
+        # Priority: Check step first to ensure quality checking happens
+        if state.current_step == "final_review":
+            # After form filling, go to quality checker
+            print("   → Routing to quality_checker for validation")
+            return "quality_checker"
+        elif state.current_agent == AgentType.ORCHESTRATOR:
+            print("   → Routing to orchestrator")
             return "orchestrator"
         else:
+            print("   → Ending - default from form_filler")
+            return "end"
+    
+    def _route_from_quality_checker(self, state: AgentState) -> str:
+        """Route from quality checker."""
+        print(f"🔀 Routing from quality_checker: step={state.current_step}, agent={state.current_agent}")
+        
+        if state.current_agent == AgentType.ORCHESTRATOR:
+            print("   → Routing to orchestrator for correction handling")
+            return "orchestrator"
+        else:
+            print("   → Ending - quality check completed")
             return "end"
     
 

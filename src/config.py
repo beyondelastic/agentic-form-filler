@@ -24,9 +24,11 @@ class Config:
     MODEL_MAX_TOKENS: int = 4000
     
     # File paths
+    BASE_DIR: str = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # Project root directory
     DATA_DIR: str = os.getenv("DATA_DIR", "data")
     FORM_DIR: str = os.getenv("FORM_DIR", "form")
     OUTPUT_DIR: str = os.getenv("OUTPUT_DIR", "output")
+    SAMPLE_DIR: str = os.getenv("SAMPLE_DIR", "sample")
     DOCUMENT_PATH: str = os.getenv("DOCUMENT_PATH", f"{os.getenv('DATA_DIR', 'data')}/*.pdf")
     
     @classmethod
@@ -67,6 +69,26 @@ class Config:
     def has_document_intelligence(cls) -> bool:
         """Check if Document Intelligence is configured."""
         return bool(cls.AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT and cls.AZURE_DOCUMENT_INTELLIGENCE_KEY)
+    
+    @classmethod
+    def get_data_dir_path(cls) -> str:
+        """Get full path to data directory."""
+        return os.path.join(cls.BASE_DIR, cls.DATA_DIR)
+    
+    @classmethod
+    def get_form_dir_path(cls) -> str:
+        """Get full path to form directory."""
+        return os.path.join(cls.BASE_DIR, cls.FORM_DIR)
+    
+    @classmethod
+    def get_output_dir_path(cls) -> str:
+        """Get full path to output directory."""
+        return os.path.join(cls.BASE_DIR, cls.OUTPUT_DIR)
+    
+    @classmethod
+    def get_sample_dir_path(cls) -> str:
+        """Get full path to sample directory."""
+        return os.path.join(cls.BASE_DIR, cls.SAMPLE_DIR)
 
 # Global config instance
 config = Config()

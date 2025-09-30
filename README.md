@@ -1,40 +1,43 @@
-# 🚀 Advanced Agentic Form Filler with Context-Aware Intelligence
+# 🚀 Advanced Agentic Form Filler with Quality-Assured Intelligence
 
-A sophisticated multi-agent system built with LangGraph that automates intelligent form filling through comprehensive form analysis, context-aware semantic data extraction, and intelligent form completion using Azure OpenAI and advanced AI tools.
+A sophisticated **5-agent system** built with LangGraph that automates intelligent form filling through comprehensive form analysis, context-aware semantic data extraction, quality-assured form completion, and iterative improvement using Azure OpenAI and advanced AI tools.
 
-## � New Features & Recent Enhancements
+## 🎯 Latest Features & M📊 Extraction Results with Enhanced Confidence:
+- [First Name Field]: "[First Name]" (confidence: 100%)
+- [Last Name Field]: "[Last Name]" (confidence: 100%)  
+- [Address Field]: "[City Name]" (confidence: 95%)
+- [Date Field]: "[Current Date]" (confidence: 95%)Enhancements
 
-### 🧠 **Context-Aware Data Generation** *(New)*
-- **Smart Signing Field Detection**: Automatically detects and fills location/date signing fields
-- **Intelligent Location Extraction**: Uses employer documents to generate appropriate location values  
-- **Current Date Generation**: Automatically generates today's date in proper German format (DD.MM.YYYY)
-- **Enhanced Pattern Recognition**: Advanced field matching for complex German form structures
+### 🛡️ **Quality-Assured Processing** *(NEW - 5th Agent)*
+- **Quality Checker Agent**: Advanced validation system with reference pattern learning
+- **PDF & Excel Quality Assessment**: Comprehensive validation for both form types
+- **Semantic Consistency Validation**: Detects contextual errors (birth dates vs application dates)
+- **Reference Pattern Learning**: Learns from template forms to validate completeness
+- **Iterative Quality Improvement**: Automated correction loops with intelligent feedback
+- **Enhanced Basic Validation**: Smart checks even without reference forms
 
-### 📊 **Dynamic Confidence Scoring** *(Enhanced)*
-- **Multi-Factor Confidence Calculation**: 0.6-1.0 scoring based on:
-  - Response quality and completeness
-  - Data validation success
-  - Context relevance and field specificity
-- **Adaptive Scoring**: Adjusts confidence based on data type and extraction complexity
+### 🧠 **Contextual Intelligence** *(Enhanced)*
+- **Smart Date Scoring Algorithm**: Context-aware date selection (application vs birth dates)
+- **Generic Correction System**: Dynamic field categorization and semantic correction context
+- **Temporal Consistency Checking**: Validates date appropriateness based on surrounding text
+- **Pre-filtering with Direct Bypass**: High-confidence candidates skip LLM for accuracy
 
-### 🔧 **Robust Dependency Management** *(Fixed)*
-- **Compatible LangChain Integration**: Updated with proper version ranges
-- **Clean Import Structure**: All dependency conflicts resolved
-- **Production-Ready Setup**: Streamlined installation and configuration
+### � **Advanced Data Extraction** *(Major Update)*
+- **Contextual Date Extraction**: Scores dates based on surrounding context (95 vs -110 scoring)
+- **Multi-Document Processing**: Intelligent handling of CVs, certificates, and application letters
+- **Enhanced Semantic Validation**: Cross-field consistency and relationship checking
+- **Configurable Directory Structure**: Environment-based paths for flexible deployment
 
-### ✨ **Enhanced Data Extraction Pipeline** *(Improved)*
-- **Context-Aware Field Analysis**: Uses form structure to guide extraction strategy
-- **Improved Pattern Matching**: Better detection of German form field naming conventions
-- **Priority-Based Location Extraction**: Multi-level fallback for employer location detection
-- **Clean Value Generation**: Eliminates unwanted text artifacts in extracted data
+
 
 ## 🎯 Core Features
 
-### **Advanced Multi-Agent Architecture**
+### **Advanced 5-Agent Architecture**
 - **Orchestrator Agent**: Manages conversation flow and coordinates all specialized agents
 - **Form Learner Agent**: Analyzes target form structure, sections, fields, and relationships
 - **Data Extractor Agent**: Performs context-aware semantic data extraction with intelligence
 - **Form Filler Agent**: Intelligently maps and fills forms using comprehensive analysis
+- **Quality Checker Agent**: Validates filled forms with reference pattern learning and semantic consistency checking
 
 ### **Comprehensive Form Analysis**
 - **PDF Form Analysis**: Complete extraction of form fields, sections, instructions, and dependencies
@@ -45,8 +48,16 @@ A sophisticated multi-agent system built with LangGraph that automates intellige
 ### **Intelligent Data Processing**
 - **Azure Document Intelligence**: High-accuracy key-value extraction using pre-built models
 - **Context-Aware Semantic Extraction**: Form-aware extraction targeting specific field requirements  
-- **Dynamic Confidence Scoring**: Multi-factor reliability assessment for each extracted value
-- **Signing Field Intelligence**: Automatic detection and generation of location/date fields
+- **Contextual Date Scoring**: Smart selection between application dates and birth dates
+- **Multi-Document Intelligence**: Handles CVs, certificates, and application letters simultaneously
+
+### **Quality-Assured Validation**
+- **Reference Pattern Learning**: Analyzes template forms to learn expected field patterns
+- **Semantic Consistency Checking**: Validates temporal logic (birth dates vs application dates)
+- **Cross-Field Relationship Validation**: Ensures field dependencies and business rules
+- **Enhanced Basic Validation**: Smart format and semantic checks even without reference forms
+- **Iterative Quality Improvement**: Automated correction loops with intelligent feedback
+- **Comprehensive Quality Reports**: Detailed JSON reports with confidence scores and issue detection
 
 ### **Smart Field Mapping**
 - **LLM-Based Semantic Matching**: Maps fields across different languages and naming conventions
@@ -72,32 +83,50 @@ A sophisticated multi-agent system built with LangGraph that automates intellige
 
 ```
 ┌─────────────────┐
-│   Orchestrator  │ ◄──────────────────────┐
-│     Agent       │                        │
-│  (Coordinator)  │                        │
-└─────────┬───────┘                        │
-          │                                │
-          ▼                                │
-┌─────────────────┐    ┌──────────────────┐│    ┌─────────────────┐
-│   Form Learner  │───►│  Data Extractor  ├┼───►│   Form Filler   │
-│     Agent       │    │     Agent        ││    │     Agent       │
-│ (Structure)     │    │   (Semantic)     ││    │  (Intelligent)  │
-└─────────────────┘    └──────────────────┘│    └─────────────────┘
-          │                       │        │             │
-          └───────────────────────┼────────┘             │
-                                  │                      │
-                          ┌───────▼──────────────────────▼──┐
-                          │      Human-in-Loop Interface    │
-                          │   (Feedback & Quality Control)  │
-                          └─────────────────────────────────┘
+│   Orchestrator  │ ◄──────────────────────────────────────┐
+│     Agent       │                                        │
+│  (Coordinator)  │                                        │
+└─────────┬───────┘                                        │
+          │                                                │
+          ▼                                                │
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   Form Learner  │───►│  Data Extractor  │───►│   Form Filler   │
+│     Agent       │    │     Agent        │    │     Agent       │
+│ (Structure)     │    │   (Semantic)     │    │  (Intelligent)  │
+└─────────────────┘    └──────────────────┘    └─────────┬───────┘
+          │                       │                      │
+          │                       │                      ▼
+          │                       │            ┌─────────────────┐
+          │                       │            │ Quality Checker │
+          │                       │            │     Agent       │
+          │                       │            │  (Validation)   │
+          │                       │            └─────────┬───────┘
+          │                       │                      │
+          └───────────────────────┼──────────────────────┼───────┐
+                                  │                      │       │
+                          ┌───────▼──────────────────────▼───────▼──┐
+                          │         Human-in-Loop Interface         │
+                          │    (Feedback & Quality Assurance)       │
+                          └─────────────────────────────────────────┘
 
 Workflow Flow:
-1. 🎯 Orchestrator → Manages entire workflow and user interaction
+1. 🎯 Orchestrator → Manages entire workflow and coordinates all agents
 2. 📋 Form Learner → Analyzes target form structure and requirements  
 3. 📄 Data Extractor → Extracts data using form-aware semantic processing
 4. ✍️ Form Filler → Maps and fills forms with intelligent validation
-5. 🔄 Human Review → Continuous feedback and quality assurance
+5. 🛡️ Quality Checker → Validates filled forms with reference pattern learning
+6. 🔄 Human Review → Continuous feedback and iterative quality improvement
 ```
+
+### Agent Responsibilities
+
+| Agent | Primary Function | Key Capabilities |
+|-------|------------------|------------------|
+| 🎯 **Orchestrator** | Workflow coordination & user interaction | Route between agents, manage conversations, handle feedback |
+| 📋 **Form Learner** | Form structure analysis | PDF/Excel field extraction, section identification, dependency mapping |
+| 📄 **Data Extractor** | Semantic data extraction | Contextual date scoring, multi-document processing, field matching |
+| ✍️ **Form Filler** | Intelligent form completion | PDF/Excel form filling, value mapping, format preservation |
+| 🛡️ **Quality Checker** | Validation & improvement | Reference pattern learning, semantic consistency, iterative correction |
 
 ## 🚀 Quick Start
 
@@ -124,6 +153,12 @@ AZURE_OPENAI_DEPLOYMENT_NAME=your_deployment_name_here
 # Optional - Azure Document Intelligence (recommended for better accuracy)
 AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT=https://your-doc-intelligence-resource.cognitiveservices.azure.com/
 AZURE_DOCUMENT_INTELLIGENCE_KEY=your_document_intelligence_key_here
+
+# Directory Configuration (optional - defaults shown)
+DATA_DIR=data
+FORM_DIR=form
+OUTPUT_DIR=output
+SAMPLE_DIR=sample
 ```
 
 ### 3. Prepare Your Documents
@@ -138,11 +173,12 @@ python -m src.main
 
 ## 📋 Usage Flow
 
-1. **Initialization**: The Orchestrator welcomes you and explains the enhanced 4-agent process
+1. **Initialization**: The Orchestrator welcomes you and explains the enhanced 5-agent process
 2. **Requirements Gathering**: Provide instructions about:
    - What type of documents you're processing (PDF, text files)
    - What form needs to be filled (PDF forms, Excel templates)
    - Any specific data mapping requirements or business rules
+   - Optional reference forms for quality validation
 3. **Form Learning**: The Form Learner Agent analyzes your target form to understand:
    - Complete form structure and sections
    - Field types, requirements, and dependencies  
@@ -150,8 +186,9 @@ python -m src.main
    - Validation rules and data relationships
 4. **Semantic Data Extraction**: Using form learning insights, the Data Extractor performs:
    - Form-aware extraction targeting specific field requirements
-   - Semantic matching of data to expected field types
-   - Context-driven processing for higher accuracy
+   - Contextual date scoring and intelligent selection
+   - Cross-field consistency validation
+   - Multi-document processing with semantic understanding
 5. **Review & Feedback**: Review extracted data with enhanced context:
    - See how data maps to specific form fields
    - Validate field relationships and dependencies
@@ -160,11 +197,17 @@ python -m src.main
    - PDF forms: Direct field filling with validation
    - Excel forms: Cell-by-cell completion with formula preservation
    - Multi-section handling with relationship awareness
-7. **Quality Assurance**: Built-in validation and final review:
-   - Field validation against form requirements
-   - Dependency checking and rule validation
+7. **Quality Assurance**: The Quality Checker Agent validates results:
+   - Reference pattern learning from template forms
+   - Semantic consistency checking (temporal validation)
+   - Cross-field relationship validation
+   - Basic validation even without reference forms
+   - Automated correction suggestions with intelligent feedback
+8. **Iterative Improvement**: Quality-driven correction cycles:
+   - Automated re-extraction with enhanced context
+   - Generic correction system for semantic issues
    - Human review with improvement suggestions
-8. **Completion**: Generate final output with quality metrics and next steps
+9. **Completion**: Generate final output with comprehensive quality metrics
 
 ## 🔧 Configuration
 
@@ -178,6 +221,10 @@ python -m src.main
 | `AZURE_OPENAI_API_VERSION` | API version (default: 2024-12-01-preview) | No |
 | `AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT` | Azure Document Intelligence endpoint | Optional* |
 | `AZURE_DOCUMENT_INTELLIGENCE_KEY` | Azure Document Intelligence key | Optional* |
+| `DATA_DIR` | Source documents directory (default: data) | No |
+| `FORM_DIR` | Form templates directory (default: form) | No |
+| `OUTPUT_DIR` | Generated outputs directory (default: output) | No |
+| `SAMPLE_DIR` | Sample/reference forms directory (default: sample) | No |
 | `DOCUMENT_PATH` | Glob pattern for PDF files (default: data/*.pdf) | No |
 
 *\* Azure Document Intelligence provides significantly better extraction accuracy but is optional. The system will fallback to text-based extraction if not configured.*
@@ -199,7 +246,8 @@ agentic-form-filler/
 │   │   ├── orchestrator.py       # 🎯 Orchestrator agent - workflow coordination
 │   │   ├── form_learner.py       # 📋 Form Learner agent - structure analysis  
 │   │   ├── data_extractor.py     # 📄 Data Extractor agent - semantic extraction
-│   │   └── form_filler.py        # ✍️ Form Filler agent - intelligent filling
+│   │   ├── form_filler.py        # ✍️ Form Filler agent - intelligent filling
+│   │   └── quality_checker.py    # 🛡️ Quality Checker agent - validation & improvement
 │   ├── tools/
 │   │   ├── comprehensive_form_analyzer.py        # PDF form analysis & structure
 │   │   ├── comprehensive_excel_form_analyzer.py  # Excel form analysis & structure
@@ -215,9 +263,12 @@ agentic-form-filler/
 │   └── [your_documents.pdf]                     # Your PDF documents for processing
 ├── form/                      # Form templates  
 │   └── [your_forms.pdf]                         # Your target forms to fill
+├── sample/                    # Sample/reference forms (configurable via SAMPLE_DIR)
+│   └── [reference_forms.pdf]                    # Pre-filled forms for quality validation
 ├── output/                    # Generated filled forms (with timestamp)
 │   ├── semantic_extraction_*.json               # Extraction results with confidence
 │   ├── semantic_mapping_*.json                  # Field mapping reports
+│   ├── quality_assessment_*.json                # Quality validation reports
 │   └── filled_*.pdf                            # Final filled forms
 ├── tests/                     # Test suite and documentation
 ├── requirements.txt          # ⭐ Python dependencies (UPDATED with compatible versions)
@@ -241,24 +292,54 @@ agentic-form-filler/
 
 ## 🎉 Example Results
 
-### Context-Aware Signing Field Detection
-```
-🧠 Context-aware generation: txtf_57_Ort -> [City Name]
-🧠 Context-aware generation: txtf_58_Datum -> 25.09.2025
-🧠 Context-aware generation: txtf_24_Arbeitsort_Adresse -> [City Name]
+### Quality-Assured Processing with 5-Agent System
 
-✅ Clean, professional output - no unwanted text artifacts!
+#### **Contextual Date Intelligence**
+```
+🎯 Extracting: [Date Field] (date)
+   🔍 Field analysis - [Date Field]: is_document_date=True, type=date
+   📅 Available dates in documents: ['DD.MM.YY', 'DD.MM.YYYY', 'DD.MM.YYYY']
+   🎯 Applying special document date extraction for [Date Field]
+   📊 Date scoring results:
+     - DD.MM.YY: score=95 (application context)
+     - DD.MM.YYYY: score=-110 (birth date context)
+   ✅ Found document date candidate: DD.MM.YY
+   ⚡ Using pre-filtered candidate directly (bypassing LLM)
+```
+
+#### **Quality Validation with Reference Forms**
+```
+🔍 Quality Checker Agent Processing
+📖 Analyzing reference form: [template_form.pdf]
+   📄 Analyzing PDF reference form...
+   📋 Created X reference patterns from PDF form
+🔍 Assessing form quality...
+   📊 Quality assessment: X/X checks passed (100.0%)
+   
+✅ Quality check passed! Overall quality: 100.0% (X/X checks passed)
+```
+
+#### **Enhanced Basic Validation (No Reference Form)**
+```
+✅ Basic quality check passed! Overall quality: 100.0% (6/6 basic checks passed) 
+⚠️ Note: Limited validation without reference form
+
+💡 Enhanced basic checks detected:
+✅ Format validation (length, unusual characters)
+✅ Semantic validation (dates in name fields, etc.)
+✅ Email format validation (@symbol)
+✅ Phone number validation (contains digits)
 ```
 
 ### Dynamic Confidence Scoring
 ```
 📊 Extraction Results with Enhanced Confidence:
-- txtf_3_Vorname: "[First Name]" (confidence: 100%)
-- txtf_4_Nachname: "[Last Name]" (confidence: 100%)  
-- txtf_24_Arbeitsort_Adresse: "[City Name]" (confidence: 95%)
-- txtf_58_Datum: "25.09.2025" (confidence: 95%)
+- [First Name Field]: "[First Name]" (confidence: 100%)
+- [Last Name Field]: "[Last Name]" (confidence: 100%)  
+- [Address Field]: "[City Name]" (confidence: 95%)
+- [Date Field]: "[Current Date]" (confidence: 95%)
 
-🎯 Average confidence: 91% across extracted fields
+🎯 Average confidence: 97% across extracted fields
 ```
 
 ### Complete Processing Pipeline
@@ -272,51 +353,42 @@ agentic-form-filler/
 🎯 Extracted fields with high average confidence
 
 Context-aware generation working perfectly:
-- DETECTED: txtf_57_Ort -> [City Name]
-- DETECTED: txtf_24_Arbeitsort_Adresse -> [City Name]  
-- DETECTED: rbtn_24_Arbeitsort -> [City Name]
-- DETECTED: txtf_58_Datum -> 25.09.2025
+- DETECTED: [Location Field] -> [City Name]
+- DETECTED: [Address Field] -> [City Name]  
+- DETECTED: [Location Button] -> [City Name]
+- DETECTED: [Date Field] -> [Current Date]
 
 ✅ Form filling completed successfully!
 📄 Output: output/filled_[form_name]_[timestamp].pdf
 ```
 ```
-🧠 Context-aware generation: txtf_57_Ort -> Wuppertal
-🧠 Context-aware generation: txtf_58_Datum -> 25.09.2025
-🧠 Context-aware generation: txtf_24_Arbeitsort_Adresse -> Wuppertal
+🧠 Context-aware generation: [Location Field] -> [City Name]
+🧠 Context-aware generation: [Date Field] -> [Current Date]
+🧠 Context-aware generation: [Address Field] -> [City Name]
 
 ✅ Clean, professional output - no unwanted text artifacts!
 ```
 
-### Dynamic Confidence Scoring
-```
-� Extraction Results with Enhanced Confidence:
-- txtf_3_Vorname: "Daisy" (confidence: 100%)
-- txtf_4_Nachname: "Duck" (confidence: 100%)  
-- txtf_24_Arbeitsort_Adresse: "Wuppertal" (confidence: 95%)
-- txtf_58_Datum: "25.09.2025" (confidence: 95%)
 
-🎯 Average confidence: 91% across 32 extracted fields
-```
 
 ### Complete Processing Pipeline
 ```
-�🔍 Starting semantic data extraction for 69 fields from 3 documents
-📄 Loaded content from input-1.pdf: 2847 chars
-📄 Loaded content from input-2.pdf: 3156 chars  
-📄 Loaded content from input-3.pdf: 489 chars
+�🔍 Starting semantic data extraction for X fields from Y documents
+📄 Loaded content from [document-1.pdf]: X chars
+📄 Loaded content from [document-2.pdf]: X chars  
+📄 Loaded content from [document-3.pdf]: X chars
 
-✅ Semantic extraction complete: 32 fields found
-🎯 Extracted 32/69 fields with 91% average confidence
+✅ Semantic extraction complete: X fields found
+🎯 Extracted X/Y fields with high average confidence
 
 Context-aware generation working perfectly:
-- DETECTED: txtf_57_Ort -> Wuppertal
-- DETECTED: txtf_24_Arbeitsort_Adresse -> Wuppertal  
-- DETECTED: rbtn_24_Arbeitsort -> Wuppertal
-- DETECTED: txtf_58_Datum -> 25.09.2025
+- DETECTED: [Location Field] -> [City Name]
+- DETECTED: [Address Field] -> [City Name]  
+- DETECTED: [Location Button] -> [City Name]
+- DETECTED: [Date Field] -> [Current Date]
 
 ✅ Form filling completed successfully!
-📄 Output: output/filled_....pdf
+📄 Output: output/filled_[form_name]_[timestamp].pdf
 ```
 
 ## 🔍 Interactive Example Session

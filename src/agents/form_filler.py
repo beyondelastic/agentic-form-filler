@@ -79,9 +79,9 @@ class FormFillerAgent:
                     "errors": form_result.errors
                 })
             
-            # Move to final review
+            # Move to final review with quality checking
             state.current_step = "final_review"
-            state.current_agent = AgentType.ORCHESTRATOR
+            state.current_agent = None  # Let workflow route to quality checker
             
             return state
             

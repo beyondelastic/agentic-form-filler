@@ -32,6 +32,11 @@ class DataExtractorAgent:
             if not hasattr(state, 'form_structure') or not state.form_structure:
                 return self._handle_extraction_error(state, "Form learning required before data extraction. Please run form analysis first.")
             
+            # Print quality correction context if available
+            if state.user_instructions and "QUALITY CORRECTION CONTEXT" in state.user_instructions:
+                print("🔧 Quality correction context received:")
+                print(state.user_instructions)
+            
             # Get list of files to process
             files_to_process = state.pdf_file_paths if state.pdf_file_paths else [state.pdf_file_path] if state.pdf_file_path else []
             
@@ -54,7 +59,8 @@ class DataExtractorAgent:
             semantic_results = await self.semantic_extractor.extract_form_data(
                 document_paths=files_to_process,
                 form_fields=state.form_fields or {},
-                form_learning_data=state.form_structure
+                form_learning_data=state.form_structure,
+                correction_context=state.user_instructions
             )
             
             if not semantic_results:

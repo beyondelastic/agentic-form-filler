@@ -1,7 +1,7 @@
 """Orchestrator agent that manages the conversation and coordinates other agents."""
 import os
-from typing import Dict, Any, Optional
-from src.models import AgentState, AgentType, MessageType, Message
+from typing import Dict, Any, Optional, List
+from src.models import AgentState, AgentType, MessageType, Message, QualityIssue
 from src.llm_client import get_llm_client
 from src.config import config
 
@@ -45,6 +45,8 @@ class OrchestratorAgent:
             return await self._coordinate_form_fill(state)
         elif state.current_step == "final_review":
             return await self._final_review(state)
+        elif state.current_step == "quality_correction":
+            return await self._handle_quality_correction(state)
         elif state.current_step == "completed":
             return await self._handle_completion(state)
         elif state.current_step == "finished":
@@ -177,6 +179,10 @@ Great! Now tell me:
             state.pdf_file_path = data_files[0]  # Backward compatibility
         if not state.form_template_path:
             state.form_template_path = form_files[0]
+        
+        # Auto-detect reference form in sample directory
+        if not state.reference_form_path:
+            state.reference_form_path = self._detect_reference_form(state.form_template_path)
         
         # Process requirements with LLM
         system_prompt = """You are an orchestrator agent in a multi-agent form-filling system.
@@ -788,6 +794,250 @@ Please enter 1, 2, or 3.""",
                 form_files.append(os.path.join(form_dir, file))
         
         return sorted(form_files)
+    
+    async def _handle_quality_correction(self, state: AgentState) -> AgentState:
+        """Handle quality correction feedback and determine corrective actions."""
+        
+        print("🔧 Handling quality correction feedback...")
+        
+        if not state.quality_assessment or not state.quality_assessment.issues_found:
+            print("   ⚠️  No quality issues to correct")
+            state.current_step = "completed"
+            return state
+        
+        issues = state.quality_assessment.issues_found
+        critical_issues = [i for i in issues if i.severity in ["critical", "high"]]
+        
+        print(f"   🔍 Found {len(issues)} total issues, {len(critical_issues)} critical/high severity")
+        
+        # Determine correction strategy based on issue types
+        semantic_issues = [i for i in issues if i.issue_type in ["semantic_mismatch", "temporal_inconsistency", "contextual_error"]]
+        format_issues = [i for i in issues if i.issue_type in ["format_error", "data_type_error"]]
+        
+        if semantic_issues:
+            print("   🔄 Semantic issues detected - need re-extraction with enhanced context")
+            return await self._handle_semantic_corrections(state, semantic_issues)
+        elif format_issues and any(i.severity in ["high", "critical"] for i in format_issues):
+            print("   🔄 Critical format issues detected - need re-filling with corrected mappings")
+            return await self._handle_format_corrections(state, format_issues)
+        else:
+            print("   ✅ Only minor issues remain - proceeding to completion")
+            state.current_step = "completed"
+            return state
+    
+    async def _handle_semantic_corrections(self, state: AgentState, issues: list) -> AgentState:
+        """Handle semantic correction by providing enhanced context for re-extraction."""
+        
+        # Create enhanced context instructions based on quality issues
+        correction_context = self._build_correction_context(issues, state)
+        
+        # Add correction instructions to state for data extractor
+        state.user_instructions = (state.user_instructions or "") + f"\n\nQUALITY CORRECTION CONTEXT:\n{correction_context}"
+        
+        # Route back to data extraction with enhanced context
+        state.current_step = "coordinating_extraction"
+        state.current_agent = AgentType.DATA_EXTRACTOR
+        
+        # Add feedback message
+        state.messages.append({
+            "role": "assistant",
+            "content": f"🔄 Initiating quality corrections based on {len(issues)} semantic issues. "
+                      f"Re-extracting data with enhanced context instructions.",
+            "agent": self.agent_type.value,
+            "correction_type": "semantic",
+            "issues_count": len(issues)
+        })
+        
+        return state
+    
+    async def _handle_format_corrections(self, state: AgentState, issues: list) -> AgentState:
+        """Handle format correction by updating field mappings and re-filling."""
+        
+        # Create corrected field mappings based on issues
+        correction_mappings = self._build_format_corrections(issues, state)
+        
+        # Store corrections in state for form filler
+        if not hasattr(state, 'field_corrections'):
+            state.field_corrections = {}
+        state.field_corrections.update(correction_mappings)
+        
+        # Route back to form filling with corrections
+        state.current_step = "coordinating_form_fill"
+        state.current_agent = AgentType.FORM_FILLER
+        
+        state.messages.append({
+            "role": "assistant",
+            "content": f"🔄 Applying format corrections for {len(issues)} issues and re-filling form.",
+            "agent": self.agent_type.value,
+            "correction_type": "format",
+            "issues_count": len(issues)
+        })
+        
+        return state
+    
+    def _build_correction_context(self, issues: list, state: AgentState) -> str:
+        """Build enhanced context instructions for semantic corrections."""
+        
+        corrections = []
+        
+        for issue in issues:
+            if issue.issue_type == "temporal_inconsistency":
+                # Generic temporal inconsistency handling
+                field_context = self._analyze_field_semantic_context(issue.field_name, state)
+                corrections.append(self._build_temporal_correction(issue, field_context, state))
+            
+            elif issue.issue_type == "semantic_mismatch":
+                corrections.append(f"- {issue.field_name}: {issue.suggestion}")
+            
+            elif issue.issue_type == "contextual_error":
+                corrections.append(f"- {issue.field_name}: Requires context-aware extraction. {issue.suggestion}")
+        
+        # Add reference form context if available
+        context_text = "Field Extraction Corrections:\n" + "\n".join(corrections)
+        
+        if state.reference_form_path:
+            context_text += f"\n\nReference form available at: {state.reference_form_path}"
+            context_text += "\nUse reference form context to understand correct field purposes and value types."
+        
+        return context_text
+    
+    def _build_format_corrections(self, issues: list, state: AgentState) -> dict:
+        """Build format correction mappings."""
+        
+        corrections = {}
+        
+        for issue in issues:
+            if issue.issue_type == "data_type_error":
+                corrections[issue.field_id] = {
+                    "correction_type": "data_type",
+                    "expected_type": "numeric" if "numeric" in issue.suggestion else "text",
+                    "suggestion": issue.suggestion
+                }
+            
+            elif issue.issue_type == "format_error":
+                corrections[issue.field_id] = {
+                    "correction_type": "format",
+                    "expected_pattern": issue.expected_pattern,
+                    "suggestion": issue.suggestion
+                }
+        
+        return corrections
+    
+    def _analyze_field_semantic_context(self, field_name: str, state: AgentState) -> Dict[str, Any]:
+        """Analyze what type of date/field this is semantically."""
+        field_lower = field_name.lower()
+        
+        context = {
+            "is_document_date": any(keyword in field_lower for keyword in 
+                ['eingang', 'submission', 'received', 'application', 'document', 'datum']),
+            "is_personal_date": any(keyword in field_lower for keyword in 
+                ['geburt', 'birth', 'born']),
+            "is_deadline_date": any(keyword in field_lower for keyword in 
+                ['deadline', 'due', 'frist']),
+            "date_category": "unknown"
+        }
+        
+        if context["is_document_date"]:
+            context["date_category"] = "document_submission"
+        elif context["is_personal_date"]:
+            context["date_category"] = "personal_biographical"
+        elif context["is_deadline_date"]:
+            context["date_category"] = "future_deadline"
+        
+        return context
+    
+    def _build_temporal_correction(self, issue: 'QualityIssue', field_context: Dict[str, Any], state: AgentState) -> str:
+        """Build generic temporal correction based on field context."""
+        from datetime import datetime
+        
+        current_year = datetime.now().year
+        current_value = str(issue.current_value) if issue.current_value else ""
+        
+        if field_context["date_category"] == "document_submission":
+            # Find conflicting personal dates in extracted data
+            birth_dates = self._find_personal_dates_in_extraction(state)
+            
+            correction = f"- {issue.field_name}: CRITICAL - This field expects a DOCUMENT/SUBMISSION date, not personal biographical dates."
+            
+            if current_value in birth_dates:
+                correction += f" Current value '{current_value}' appears to be a birth date."
+            
+            correction += f" Look for recent dates ({current_year-1}-{current_year}) near application/submission context, document headers, or cover letter dates."
+            correction += " Avoid dates from biographical sections (birth dates, graduation dates from years ago)."
+            
+            return correction
+            
+        elif field_context["date_category"] == "personal_biographical":
+            return f"- {issue.field_name}: This field expects personal biographical dates (birth, graduation, etc.), not document submission dates."
+            
+        elif field_context["date_category"] == "future_deadline":
+            return f"- {issue.field_name}: This field expects a future date (deadline, due date), not past dates."
+            
+        else:
+            # Generic temporal correction
+            return f"- {issue.field_name}: Temporal inconsistency detected. {issue.suggestion}"
+    
+    def _find_personal_dates_in_extraction(self, state: AgentState) -> List[str]:
+        """Find dates that appear to be personal/biographical in the extracted data."""
+        personal_dates = []
+        
+        if not state.extracted_data:
+            return personal_dates
+            
+        for field_id, value in state.extracted_data.items():
+            # Check if this looks like a personal date based on field context
+            if hasattr(state, 'form_structure') and state.form_structure:
+                field_info = state.form_structure.get('all_fields', {}).get(field_id, {})
+                field_name = field_info.get('name', '') if isinstance(field_info, dict) else str(field_info)
+                
+                if any(keyword in field_name.lower() for keyword in ['geburt', 'birth', 'born']):
+                    personal_dates.append(str(value))
+                    
+        return personal_dates
+    
+    def _detect_reference_form(self, form_template_path: str) -> Optional[str]:
+        """Auto-detect reference form in sample directory based on template."""
+        
+        if not form_template_path:
+            return None
+        
+        try:
+            # Look for reference forms in sample directory
+            from src.config import config
+            
+            # Check common sample directories
+            sample_dirs = [
+                os.path.join(os.path.dirname(os.path.dirname(form_template_path)), 'sample'),
+                os.path.join(config.BASE_DIR, 'sample'),
+                'sample'
+            ]
+            
+            form_filename = os.path.basename(form_template_path)
+            form_name_base = os.path.splitext(form_filename)[0]
+            
+            for sample_dir in sample_dirs:
+                if not os.path.exists(sample_dir):
+                    continue
+                
+                # Look for files with similar names or containing the form name
+                for file in os.listdir(sample_dir):
+                    file_lower = file.lower()
+                    form_name_lower = form_name_base.lower()
+                    
+                    # Match files with similar names or reference patterns
+                    if (form_name_lower in file_lower or 
+                        file_lower.startswith(form_name_lower) or
+                        any(ref_word in file_lower for ref_word in ['bewerbung', 'sample', 'reference', 'filled'])):
+                        
+                        reference_path = os.path.join(sample_dir, file)
+                        print(f"🔗 Auto-detected reference form: {file}")
+                        return reference_path
+            
+            return None
+            
+        except Exception as e:
+            print(f"⚠️  Error detecting reference form: {str(e)}")
+            return None
     
     def _format_file_list(self, files: list[str]) -> str:
         """Format file list for display."""

@@ -9,6 +9,7 @@ class AgentType(str, Enum):
     FORM_LEARNER = "form_learner"
     DATA_EXTRACTOR = "data_extractor"
     FORM_FILLER = "form_filler"
+    QUALITY_CHECKER = "quality_checker"
 
 class MessageType(str, Enum):
     """Types of messages between agents."""
@@ -60,6 +61,14 @@ class AgentState(BaseModel):
     # Missing fields handling
     missing_fields_to_fill: Optional[List[str]] = None
     
+    # Quality checking results
+    quality_assessment: Optional['QualityAssessmentResult'] = None
+    reference_form_path: Optional[str] = None
+    reference_patterns: Optional[Dict[str, 'ReferenceFieldPattern']] = None
+    quality_iteration_count: int = 0
+    max_quality_iterations: int = 2
+    field_corrections: Optional[Dict[str, Any]] = None
+    
     # Agent tracking
     current_agent: Optional[AgentType] = None
     completed_agents: List[AgentType] = []
@@ -97,3 +106,34 @@ class FormFillingResult(BaseModel):
     filled_fields: Dict[str, Any]
     success: bool
     errors: Optional[List[str]] = None
+
+class QualityIssue(BaseModel):
+    """Represents a quality issue found during form validation."""
+    field_id: str
+    field_name: str
+    issue_type: str  # "semantic_mismatch", "data_type_error", "contextual_error", etc.
+    current_value: Any
+    expected_pattern: Optional[str] = None
+    confidence: float
+    suggestion: str
+    severity: str  # "low", "medium", "high", "critical"
+
+class ReferenceFieldPattern(BaseModel):
+    """Pattern learned from reference forms for a specific field."""
+    field_id: str
+    field_name: str
+    field_type: str
+    semantic_category: str  # "personal_date", "document_date", "name", "contact", etc.
+    value_pattern: Optional[str] = None  # regex or description
+    context_clues: List[str] = []
+    example_values: List[str] = []
+
+class QualityAssessmentResult(BaseModel):
+    """Result from quality assessment."""
+    overall_quality_score: float
+    issues_found: List[QualityIssue]
+    passed_checks: int
+    total_checks: int
+    reference_form_used: Optional[str] = None
+    assessment_timestamp: str
+    requires_correction: bool
